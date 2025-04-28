@@ -1,103 +1,186 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+import { useState, useEffect, useRef } from 'react';
+import gsap from 'gsap';
+import WordleBoard from '../components/WordleBoard';
+import Keyboard from '../components/Keyboard';
+import { Toaster, toast } from 'react-hot-toast';
+import Confetti from 'react-confetti';
+import { useWindowSize } from '@react-hook/window-size';
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+export default function HomePage() {
+    const [solution, setSolution] = useState('');
+    const [currentGuess, setCurrentGuess] = useState('');
+    const [guesses, setGuesses] = useState([]);
+    const [letterStatuses, setLetterStatuses] = useState({});
+    const [gameStatus, setGameStatus] = useState('playing');
+    const popupRef = useRef(null);
+    const boardRef = useRef(null);
+    const { width, height } = useWindowSize();
+
+    useEffect(() => {
+        fetchNewWord();
+    }, []);
+
+    async function fetchNewWord() {
+        try {
+            const res = await fetch('/api/random-word');
+            const data = await res.json();
+            setSolution(data.word.toUpperCase());
+        } catch (err) {
+            console.error('Error fetching word:', err);
+            toast.error("Failed to load new word.");
+        }
+    }
+
+    function updateStatuses(guesses, solution) {
+        const statuses = { ...letterStatuses };
+        guesses.forEach(word => {
+            word.split('').forEach((letter, idx) => {
+                if (solution[idx] === letter) {
+                    statuses[letter] = 'correct';
+                } else if (solution.includes(letter)) {
+                    if (statuses[letter] !== 'correct') {
+                        statuses[letter] = 'present';
+                    }
+                } else {
+                    if (!statuses[letter]) {
+                        statuses[letter] = 'absent';
+                    }
+                }
+            });
+        });
+        setLetterStatuses(statuses);
+    }
+
+    const handleKeyPress = (letter) => {
+        if (currentGuess.length < 5) {
+            setCurrentGuess(currentGuess + letter);
+        }
+    };
+
+    const handleEnter = async () => {
+        if (currentGuess.length !== 5) {
+            toast.error('Word must be 5 letters.');
+            return;
+        }
+
+        const res = await fetch('/api/check-word', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ word: currentGuess })
+        });
+
+        if (!res.ok) {
+            toast.error('Not a valid English word.');
+            return;
+        }
+
+        const guess = currentGuess.toUpperCase();
+        const updatedGuesses = [...guesses, guess];
+        setGuesses(updatedGuesses);
+        setCurrentGuess('');
+        updateStatuses(updatedGuesses, solution);
+
+        if (guess === solution) {
+            setGameStatus('won');
+
+            // 🎉 Bounce celebration for board
+            if (boardRef.current) {
+                gsap.fromTo(boardRef.current,
+                    { scale: 1 },
+                    { scale: 1.05, yoyo: true, repeat: 3, duration: 0.3, ease: 'power1.inOut' }
+                );
+            }
+        } else if (updatedGuesses.length >= 6) {
+            setGameStatus('lost');
+        }
+    };
+
+    const handleDelete = () => {
+        setCurrentGuess(currentGuess.slice(0, -1));
+    };
+
+    const handleRestart = async () => {
+        setGuesses([]);
+        setCurrentGuess('');
+        setLetterStatuses({});
+        setGameStatus('playing');
+        await fetchNewWord();
+    };
+
+    return (
+        <main className="flex flex-col items-center justify-center min-h-screen bg-[#121212] text-gray-100 p-4 relative overflow-hidden">
+            <Toaster position="top-center" reverseOrder={false} />
+
+            {/* 🎉 Confetti if WON */}
+            {gameStatus === 'won' && (
+                <Confetti width={width} height={height} numberOfPieces={300} gravity={0.3} />
+            )}
+
+            {(gameStatus === 'won' || gameStatus === 'lost') && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-md z-20 animate-fade-in">
+                    <div
+                        ref={popupRef}
+                        className={`relative p-10 rounded-2xl shadow-2xl text-center space-y-6 border-2 ${
+                            gameStatus === 'won'
+                                ? 'bg-gradient-to-br from-green-400 via-green-500 to-green-600 border-green-300'
+                                : 'bg-gradient-to-br from-red-400 via-red-500 to-red-600 border-red-300'
+                        }`}
+                    >
+                        {/* ✨ Shine behind title if WON */}
+                        {gameStatus === 'won' && (
+                            <div className="absolute inset-0 flex justify-center items-center pointer-events-none">
+                                <div className="w-32 h-32 bg-white opacity-20 blur-2xl rounded-full animate-ping-slow"></div>
+                            </div>
+                        )}
+
+                        <h2 className="text-5xl font-extrabold text-white relative z-10 animate-pop">
+                            {gameStatus === 'won' ? 'Victory!' : 'Defeat'}
+                        </h2>
+
+                        <p className="text-lg text-white relative z-10">
+                            The word was: <span className="font-bold">{solution}</span>
+                        </p>
+
+                        <button
+                            onClick={handleRestart}
+                            className="mt-4 px-8 py-3 bg-white text-black font-bold rounded-xl hover:scale-110 active:scale-95 transition transform relative z-10"
+                        >
+                            Play Again
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <h1 className="text-7xl font-extrabold mb-12 text-transparent bg-clip-text bg-gradient-to-r from-white/80 to-white/50">
+                WordRush
+            </h1>
+
+            {/* 🎯 Wordle board (with ref for bounce) */}
+            <div ref={boardRef}>
+                <WordleBoard
+                    guesses={guesses}
+                    solution={solution}
+                    currentGuess={currentGuess}
+                />
+            </div>
+
+            {gameStatus === 'playing' && (
+                <Keyboard
+                    onKeyPress={handleKeyPress}
+                    onEnter={handleEnter}
+                    onDelete={handleDelete}
+                    letterStatuses={letterStatuses}
+                />
+            )}
+        </main>
+    );
 }
+
+
+
+
+
+
+
